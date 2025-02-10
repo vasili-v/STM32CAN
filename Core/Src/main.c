@@ -47,6 +47,9 @@ FDCAN_HandleTypeDef hfdcan1;
 FDCAN_HandleTypeDef hfdcan2;
 
 /* USER CODE BEGIN PV */
+__IO uint32_t FDCANFramesReceived = 0;
+FDCAN_RxHeaderTypeDef RxHeader;
+uint8_t RxData[8];
 
 /* USER CODE END PV */
 
@@ -56,6 +59,7 @@ static void MX_GPIO_Init(void);
 static void MX_FDCAN1_Init(void);
 static void MX_FDCAN2_Init(void);
 /* USER CODE BEGIN PFP */
+static void FDCAN_Config(void);
 
 /* USER CODE END PFP */
 
@@ -96,6 +100,7 @@ int main(void)
   MX_FDCAN1_Init();
   MX_FDCAN2_Init();
   /* USER CODE BEGIN 2 */
+  FDCAN_Config();
 
   /* USER CODE END 2 */
 
@@ -123,7 +128,10 @@ int main(void)
   int led_enabled = 0;
   uint32_t start = HAL_GetTick();
   uint32_t led_enabled_start = -1;
+  uint32_t led_tick_start = -1;
   BSP_LED_Off(LED_GREEN);
+
+  uint32_t frames_processed = 0;
 
   /* USER CODE END BSP */
 
@@ -136,17 +144,25 @@ int main(void)
     {
       BspButtonState = BUTTON_RELEASED;
 
+      led_enabled_start = HAL_GetTick();
       if (!led_enabled)
       {
+        led_tick_start = led_enabled_start;
+
         led_enabled = 1;
         BSP_LED_On(LED_GREEN);
-      }
-      led_enabled_start = HAL_GetTick();
 
-      if (start <= led_enabled_start) start = 0;
-      printf("%lu: led enabled\n", led_enabled_start - start);
+        if (start <= led_enabled_start) start = 0;
+        printf("%lu: led has been enabled manually\n", led_enabled_start - start);
+      }
+      else
+      {
+        if (start <= led_enabled_start) start = 0;
+        printf("%lu: led has been prolonged manually\n", led_enabled_start - start);
+      }
     }
-    else if (led_enabled)
+
+    if (led_enabled)
     {
       uint32_t now = HAL_GetTick();
       if (now - led_enabled_start >= 200)
@@ -156,6 +172,36 @@ int main(void)
 
         if (start <= now) start = 0;
         printf("%lu: led disabled\n", now - start);
+      }
+      else if (now - led_tick_start >= 50)
+      {
+        led_tick_start += 50;
+        BSP_LED_Toggle(LED_GREEN);
+      }
+    }
+
+    uint32_t n = FDCANFramesReceived - frames_processed;
+    if (n > 0)
+    {
+      frames_processed += n;
+
+      uint32_t now = HAL_GetTick();
+      if (start <= now) start = 0;
+      printf("%lu: %lu more frames have been received (total: %lu)\n", now - start, n, frames_processed);
+
+      led_enabled_start = HAL_GetTick();
+      if (!led_enabled)
+      {
+        led_enabled = 1;
+        BSP_LED_On(LED_GREEN);
+
+        if (start <= led_enabled_start) start = 0;
+        printf("%lu: led has been enabled by FDCAN event\n", led_enabled_start - start);
+      }
+      else
+      {
+        if (start <= led_enabled_start) start = 0;
+        printf("%lu: led has been prolonged by FDCAN event\n", led_enabled_start - start);
       }
     }
     /* USER CODE END WHILE */
@@ -233,7 +279,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.AutoRetransmission = DISABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
-  hfdcan1.Init.NominalPrescaler = 200;
+  hfdcan1.Init.NominalPrescaler = 20;
   hfdcan1.Init.NominalSyncJumpWidth = 1;
   hfdcan1.Init.NominalTimeSeg1 = 14;
   hfdcan1.Init.NominalTimeSeg2 = 2;
@@ -319,6 +365,44 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+/**
+  * @brief  Configures the FDCAN.
+  * @param  None
+  * @retval None
+  */
+static void FDCAN_Config(void)
+{
+  if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief  Rx FIFO 0 callback.
+  * @param  hfdcan: pointer to an FDCAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified FDCAN.
+  * @param  RxFifo0ITs: indicates which Rx FIFO 0 interrupts are signalled.
+  *         This parameter can be any combination of @arg FDCAN_Rx_Fifo0_Interrupts.
+  * @retval None
+  */
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+{
+  if((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != RESET)
+  {
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    FDCANFramesReceived++;
+  }
+}
 /* USER CODE END 4 */
 
 /**
