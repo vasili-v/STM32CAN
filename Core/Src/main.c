@@ -121,6 +121,7 @@ int main(void)
   printf("STM32 Nucleo-G474RE CAN Test\n");
 
   int led_enabled = 0;
+  uint32_t start = HAL_GetTick();
   uint32_t led_enabled_start = -1;
   BSP_LED_Off(LED_GREEN);
 
@@ -141,6 +142,9 @@ int main(void)
         BSP_LED_On(LED_GREEN);
       }
       led_enabled_start = HAL_GetTick();
+
+      if (start <= led_enabled_start) start = 0;
+      printf("%lu: led enabled\n", led_enabled_start - start);
     }
     else if (led_enabled)
     {
@@ -149,6 +153,9 @@ int main(void)
       {
         led_enabled = 0;
         BSP_LED_Off(LED_GREEN);
+
+        if (start <= now) start = 0;
+        printf("%lu: led disabled\n", now - start);
       }
     }
     /* USER CODE END WHILE */
