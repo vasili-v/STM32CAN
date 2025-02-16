@@ -47,9 +47,12 @@ FDCAN_HandleTypeDef hfdcan1;
 FDCAN_HandleTypeDef hfdcan2;
 
 /* USER CODE BEGIN PV */
-__IO uint32_t FDCANFramesReceived = 0;
+__IO uint32_t FDCAN1FramesReceived = 0;
+__IO uint32_t FDCAN2FramesReceived = 0;
 FDCAN_RxHeaderTypeDef RxHeader;
 uint8_t RxData[8];
+FDCAN_TxHeaderTypeDef TxHeader;
+uint8_t TxData[8];
 
 /* USER CODE END PV */
 
@@ -131,7 +134,8 @@ int main(void)
   uint32_t led_tick_start = -1;
   BSP_LED_Off(LED_GREEN);
 
-  uint32_t frames_processed = 0;
+  uint32_t fdcan1_frames_processed = 0;
+  uint32_t fdcan2_frames_processed = 0;
 
   /* USER CODE END BSP */
 
@@ -154,6 +158,12 @@ int main(void)
 
         if (start <= led_enabled_start) start = 0;
         printf("%lu: led has been enabled manually\n", led_enabled_start - start);
+
+        printf("Sending CAN message\n");
+        if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData) != HAL_OK)
+        {
+          Error_Handler();
+        }
       }
       else
       {
@@ -180,14 +190,14 @@ int main(void)
       }
     }
 
-    uint32_t n = FDCANFramesReceived - frames_processed;
+    uint32_t n = FDCAN1FramesReceived - fdcan1_frames_processed;
     if (n > 0)
     {
-      frames_processed += n;
+      fdcan1_frames_processed += n;
 
       uint32_t now = HAL_GetTick();
       if (start <= now) start = 0;
-      printf("%lu: %lu more frames have been received (total: %lu)\n", now - start, n, frames_processed);
+      printf("%lu: %lu more frames have been received by FDCAN1 (total: %lu)\n", now - start, n, fdcan1_frames_processed);
 
       led_enabled_start = HAL_GetTick();
       if (!led_enabled)
@@ -196,12 +206,37 @@ int main(void)
         BSP_LED_On(LED_GREEN);
 
         if (start <= led_enabled_start) start = 0;
-        printf("%lu: led has been enabled by FDCAN event\n", led_enabled_start - start);
+        printf("%lu: led has been enabled by FDCAN1 event\n", led_enabled_start - start);
       }
       else
       {
         if (start <= led_enabled_start) start = 0;
-        printf("%lu: led has been prolonged by FDCAN event\n", led_enabled_start - start);
+        printf("%lu: led has been prolonged by FDCAN1 event\n", led_enabled_start - start);
+      }
+    }
+
+    n = FDCAN2FramesReceived - fdcan2_frames_processed;
+    if (n > 0)
+    {
+      fdcan2_frames_processed += n;
+
+      uint32_t now = HAL_GetTick();
+      if (start <= now) start = 0;
+      printf("%lu: %lu more frames have been received by FDCAN2 (total: %lu)\n", now - start, n, fdcan2_frames_processed);
+
+      led_enabled_start = HAL_GetTick();
+      if (!led_enabled)
+      {
+        led_enabled = 1;
+        BSP_LED_On(LED_GREEN);
+
+        if (start <= led_enabled_start) start = 0;
+        printf("%lu: led has been enabled by FDCAN2 event\n", led_enabled_start - start);
+      }
+      else
+      {
+        if (start <= led_enabled_start) start = 0;
+        printf("%lu: led has been prolonged by FDCAN2 event\n", led_enabled_start - start);
       }
     }
     /* USER CODE END WHILE */
@@ -279,7 +314,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.AutoRetransmission = DISABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
-  hfdcan1.Init.NominalPrescaler = 20;
+  hfdcan1.Init.NominalPrescaler = 200;
   hfdcan1.Init.NominalSyncJumpWidth = 1;
   hfdcan1.Init.NominalTimeSeg1 = 14;
   hfdcan1.Init.NominalTimeSeg2 = 2;
@@ -381,6 +416,29 @@ static void FDCAN_Config(void)
   {
     Error_Handler();
   }
+
+  if (HAL_FDCAN_Start(&hfdcan2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if (HAL_FDCAN_ActivateNotification(&hfdcan2, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  TxHeader.Identifier = 0x555;
+  TxHeader.IdType = FDCAN_STANDARD_ID;
+  TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+  TxHeader.DataLength = FDCAN_DLC_BYTES_2;
+  TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+  TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
+  TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
+  TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+  TxHeader.MessageMarker = 0;
+
+  TxData[0] = 0xAA;
+  TxData[1] = 0xAA;
 }
 
 /**
@@ -400,7 +458,14 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
       Error_Handler();
     }
 
-    FDCANFramesReceived++;
+    if (hfdcan == &hfdcan1)
+    {
+      FDCAN1FramesReceived++;
+    }
+    else
+    {
+      FDCAN2FramesReceived++;
+    }
   }
 }
 /* USER CODE END 4 */
