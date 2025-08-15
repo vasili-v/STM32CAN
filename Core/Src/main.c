@@ -32,6 +32,18 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+// #define REPORT_LED
+
+#define PRESCALER_33K 300
+#define PRESCALER_125K 80
+#define PRESCALER_250K 40
+#define PRESCALER_500K 20
+
+#define TIME_SEG_1 14
+#define TIME_SEG_2 2
+
+#define DATA_PRESCALER_2M 2
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -59,9 +71,9 @@ uint8_t TxData[8];
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_FDCAN1_Init(void);
-static void MX_FDCAN2_Init(void);
 /* USER CODE BEGIN PFP */
+static void MX_FDCAN1_Init(uint32_t prescaler);
+static void MX_FDCAN2_Init(uint32_t prescaler);
 static void FDCAN_Config(void);
 
 /* USER CODE END PFP */
@@ -100,10 +112,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_FDCAN1_Init();
-  MX_FDCAN2_Init();
   /* USER CODE BEGIN 2 */
-  FDCAN_Config();
 
   /* USER CODE END 2 */
 
@@ -127,6 +136,10 @@ int main(void)
   /* USER CODE BEGIN BSP */
 
   printf("STM32 Nucleo-G474RE CAN Test\n");
+
+  MX_FDCAN1_Init(PRESCALER_500K);
+  MX_FDCAN2_Init(PRESCALER_500K);
+  FDCAN_Config();
 
   int led_enabled = 0;
   uint32_t start = HAL_GetTick();
@@ -157,7 +170,9 @@ int main(void)
         BSP_LED_On(LED_GREEN);
 
         if (start <= led_enabled_start) start = 0;
+#ifdef REPORT_LED
         printf("%lu: led has been enabled manually\n", led_enabled_start - start);
+#endif
 
         printf("Sending CAN message\n");
         if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData) != HAL_OK)
@@ -168,7 +183,9 @@ int main(void)
       else
       {
         if (start <= led_enabled_start) start = 0;
+#ifdef REPORT_LED
         printf("%lu: led has been prolonged manually\n", led_enabled_start - start);
+#endif
       }
     }
 
@@ -181,7 +198,9 @@ int main(void)
         BSP_LED_Off(LED_GREEN);
 
         if (start <= now) start = 0;
+#ifdef REPORT_LED
         printf("%lu: led disabled\n", now - start);
+#endif
       }
       else if (now - led_tick_start >= 50)
       {
@@ -206,12 +225,16 @@ int main(void)
         BSP_LED_On(LED_GREEN);
 
         if (start <= led_enabled_start) start = 0;
+#ifdef REPORT_LED
         printf("%lu: led has been enabled by FDCAN1 event\n", led_enabled_start - start);
+#endif
       }
       else
       {
         if (start <= led_enabled_start) start = 0;
+#ifdef REPORT_LED
         printf("%lu: led has been prolonged by FDCAN1 event\n", led_enabled_start - start);
+#endif
       }
     }
 
@@ -231,12 +254,16 @@ int main(void)
         BSP_LED_On(LED_GREEN);
 
         if (start <= led_enabled_start) start = 0;
+#ifdef REPORT_LED
         printf("%lu: led has been enabled by FDCAN2 event\n", led_enabled_start - start);
+#endif
       }
       else
       {
         if (start <= led_enabled_start) start = 0;
+#ifdef REPORT_LED
         printf("%lu: led has been prolonged by FDCAN2 event\n", led_enabled_start - start);
+#endif
       }
     }
     /* USER CODE END WHILE */
@@ -297,7 +324,7 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-static void MX_FDCAN1_Init(void)
+static void MX_FDCAN1_Init(uint32_t prescaler)
 {
 
   /* USER CODE BEGIN FDCAN1_Init 0 */
@@ -314,14 +341,14 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.AutoRetransmission = DISABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
-  hfdcan1.Init.NominalPrescaler = 200;
+  hfdcan1.Init.NominalPrescaler = prescaler;
   hfdcan1.Init.NominalSyncJumpWidth = 1;
-  hfdcan1.Init.NominalTimeSeg1 = 14;
-  hfdcan1.Init.NominalTimeSeg2 = 2;
-  hfdcan1.Init.DataPrescaler = 1;
+  hfdcan1.Init.NominalTimeSeg1 = TIME_SEG_1;
+  hfdcan1.Init.NominalTimeSeg2 = TIME_SEG_2;
+  hfdcan1.Init.DataPrescaler = DATA_PRESCALER_2M;
   hfdcan1.Init.DataSyncJumpWidth = 1;
-  hfdcan1.Init.DataTimeSeg1 = 14;
-  hfdcan1.Init.DataTimeSeg2 = 2;
+  hfdcan1.Init.DataTimeSeg1 = TIME_SEG_1;
+  hfdcan1.Init.DataTimeSeg2 = TIME_SEG_2;
   hfdcan1.Init.StdFiltersNbr = 0;
   hfdcan1.Init.ExtFiltersNbr = 0;
   hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
@@ -340,7 +367,7 @@ static void MX_FDCAN1_Init(void)
   * @param None
   * @retval None
   */
-static void MX_FDCAN2_Init(void)
+static void MX_FDCAN2_Init(uint32_t prescaler)
 {
 
   /* USER CODE BEGIN FDCAN2_Init 0 */
@@ -357,14 +384,14 @@ static void MX_FDCAN2_Init(void)
   hfdcan2.Init.AutoRetransmission = DISABLE;
   hfdcan2.Init.TransmitPause = DISABLE;
   hfdcan2.Init.ProtocolException = DISABLE;
-  hfdcan2.Init.NominalPrescaler = 200;
+  hfdcan2.Init.NominalPrescaler = prescaler;
   hfdcan2.Init.NominalSyncJumpWidth = 1;
-  hfdcan2.Init.NominalTimeSeg1 = 14;
-  hfdcan2.Init.NominalTimeSeg2 = 2;
-  hfdcan2.Init.DataPrescaler = 1;
+  hfdcan2.Init.NominalTimeSeg1 = TIME_SEG_1;
+  hfdcan2.Init.NominalTimeSeg2 = TIME_SEG_2;
+  hfdcan2.Init.DataPrescaler = DATA_PRESCALER_2M;
   hfdcan2.Init.DataSyncJumpWidth = 1;
-  hfdcan2.Init.DataTimeSeg1 = 14;
-  hfdcan2.Init.DataTimeSeg2 = 2;
+  hfdcan2.Init.DataTimeSeg1 = TIME_SEG_1;
+  hfdcan2.Init.DataTimeSeg2 = TIME_SEG_2;
   hfdcan2.Init.StdFiltersNbr = 0;
   hfdcan2.Init.ExtFiltersNbr = 0;
   hfdcan2.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
